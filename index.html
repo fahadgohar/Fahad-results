@@ -1,0 +1,165 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Fahad Age Calculation</title>
+  <meta name="theme-color" content="#111111" />
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin:0; background:#f6f7fb; color:#111; }
+    .wrap { max-width: 720px; margin: 24px auto; padding: 16px; }
+    .card { background:#fff; border-radius:16px; padding:18px; box-shadow:0 6px 18px rgba(0,0,0,.08); }
+    h1 { margin:0 0 8px; font-size: 22px; }
+    .sub { margin:0 0 16px; color:#555; }
+    label { display:block; font-weight:600; margin: 12px 0 6px; }
+    input { width:100%; padding:12px; border:1px solid #ddd; border-radius:12px; font-size:16px; }
+    button { margin-top:14px; width:100%; padding:12px; border:0; border-radius:12px; font-size:16px; font-weight:700; cursor:pointer; background:#111; color:#fff; }
+    button:active { transform: scale(.99); }
+    .result { margin-top:16px; padding:14px; border-radius:12px; background:#f3f4f6; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; }
+    .pill { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:10px 12px; flex:1; min-width: 180px; }
+    .big { font-size:18px; font-weight:800; margin-top:4px; }
+    .muted { color:#666; font-size:13px; margin-top:6px; }
+    .error { color:#b00020; font-weight:700; margin-top:10px; }
+    footer { margin-top:10px; color:#777; font-size:12px; text-align:center; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Fahad Age Calculation</h1>
+      <p class="sub">Calculate age as <b>Years</b> + <b>Extra Days</b> from Date of Birth.</p>
+
+      <label for="dob">Date of Birth</label>
+      <input id="dob" type="date" />
+
+      <label for="asOf">Calculate as of (optional)</label>
+      <input id="asOf" type="date" />
+
+      <button id="calcBtn">Calculate</button>
+
+      <div id="err" class="error" style="display:none;"></div>
+
+      <div id="out" class="result" style="display:none;">
+        <div class="row">
+          <div class="pill">
+            <div>Age (Years)</div>
+            <div id="years" class="big">0</div>
+          </div>
+          <div class="pill">
+            <div>Extra Days after last birthday</div>
+            <div id="days" class="big">0</div>
+          </div>
+          <div class="pill">
+            <div>Total Days Lived</div>
+            <div id="totalDays" class="big">0</div>
+          </div>
+        </div>
+        <div class="muted" id="note"></div>
+      </div>
+
+      <footer>© Fahad Age Calculation</footer>
+    </div>
+  </div>
+
+<script>
+  function toUTCDateOnly(dateStr) {
+    // dateStr is "YYYY-MM-DD"
+    const [y,m,d] = dateStr.split("-").map(Number);
+    return new Date(Date.UTC(y, m-1, d));
+  }
+
+  function daysBetweenUTC(a, b) {
+    // both are Date objects at UTC midnight
+    const ms = b.getTime() - a.getTime();
+    return Math.floor(ms / (1000 * 60 * 60 * 24));
+  }
+
+  function addYearsUTC(dateUTC, years) {
+    const y = dateUTC.getUTCFullYear() + years;
+    const m = dateUTC.getUTCMonth();
+    const d = dateUTC.getUTCDate();
+
+    // Handle Feb 29: if target year not leap, go to Feb 28
+    const candidate = new Date(Date.UTC(y, m, d));
+    if (candidate.getUTCMonth() !== m) {
+      // overflow happened (e.g., Feb 29 -> Mar 1), pull back one day
+      return new Date(Date.UTC(y, m, 0)); // last day of previous month
+    }
+    return candidate;
+  }
+
+  function calculateAge(dobUTC, asOfUTC) {
+    if (asOfUTC.getTime() < dobUTC.getTime()) {
+      throw new Error("As-of date cannot be before date of birth.");
+    }
+
+    const totalDays = daysBetweenUTC(dobUTC, asOfUTC);
+
+    // Find full years by moving birthdays forward
+    let years = asOfUTC.getUTCFullYear() - dobUTC.getUTCFullYear();
+
+    // birthday in asOf year
+    let thisYearBday = addYearsUTC(dobUTC, years);
+
+    // If birthday hasn't happened yet, subtract one year
+    if (thisYearBday.getTime() > asOfUTC.getTime()) {
+      years--;
+      thisYearBday = addYearsUTC(dobUTC, years);
+    }
+
+    const extraDays = daysBetweenUTC(thisYearBday, asOfUTC);
+
+    return { years, extraDays, totalDays, lastBirthdayUTC: thisYearBday };
+  }
+
+  function showError(msg) {
+    const err = document.getElementById("err");
+    err.textContent = msg;
+    err.style.display = "block";
+    document.getElementById("out").style.display = "none";
+  }
+
+  function clearError() {
+    const err = document.getElementById("err");
+    err.textContent = "";
+    err.style.display = "none";
+  }
+
+  document.getElementById("calcBtn").addEventListener("click", () => {
+    clearError();
+    const dobVal = document.getElementById("dob").value;
+    const asOfVal = document.getElementById("asOf").value;
+
+    if (!dobVal) return showError("Please select a Date of Birth.");
+
+    const dobUTC = toUTCDateOnly(dobVal);
+
+    // Default as-of = today (device local date), but converted to UTC date-only safely
+    let asOfUTC;
+    if (asOfVal) {
+      asOfUTC = toUTCDateOnly(asOfVal);
+    } else {
+      const now = new Date();
+      asOfUTC = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    }
+
+    try {
+      const { years, extraDays, totalDays, lastBirthdayUTC } = calculateAge(dobUTC, asOfUTC);
+
+      document.getElementById("years").textContent = years;
+      document.getElementById("days").textContent = extraDays;
+      document.getElementById("totalDays").textContent = totalDays;
+
+      const lastBday = `${lastBirthdayUTC.getUTCFullYear()}-${String(lastBirthdayUTC.getUTCMonth()+1).padStart(2,"0")}-${String(lastBirthdayUTC.getUTCDate()).padStart(2,"0")}`;
+      document.getElementById("note").textContent =
+        `Calculated as of: ${asOfUTC.toISOString().slice(0,10)} | Last birthday: ${lastBday}`;
+
+      document.getElementById("out").style.display = "block";
+    } catch (e) {
+      showError(e.message || "Something went wrong.");
+    }
+  });
+</script>
+</body>
+</html>
